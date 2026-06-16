@@ -1,0 +1,1 @@
+# PartnerIntegration.Api
