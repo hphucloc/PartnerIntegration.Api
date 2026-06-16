@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="PartnerIntegration.Api/PartnerIntegration.Api.csproj" />
+  <Project Path="PartnerIntegration.Tests/PartnerIntegration.Tests.csproj" />
+</Solution>
