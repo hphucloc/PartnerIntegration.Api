@@ -1,5 +1,7 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -21,11 +23,11 @@ public class TransactionEndpointTests
     public async Task Post_WithValidRequest_ReturnsOkResponse()
     {
         await using var factory = new TestApiFactory<FakeTransactionService>();
-        using var client = factory.CreateClient();
+        using var client = factory.CreateAuthorizedClient();
 
-        var response = await client.PostAsJsonAsync("/api/PartnerTransactions", new PartnerTransactionRequest
+        var response = await PostAuthorizedAsync(client, new PartnerTransactionRequest
         {
-            PartnerId = "PARTNER_001",
+            PartnerId = "P-1001",
             TransactionReference = "TX-1001",
             Amount = 250,
             Currency = "USD"
@@ -43,9 +45,9 @@ public class TransactionEndpointTests
     public async Task Post_WhenTimeoutExceptionOccurs_ReturnsGatewayTimeoutProblemDetails()
     {
         await using var factory = new TestApiFactory<TimeoutTransactionService>();
-        using var client = factory.CreateClient();
+        using var client = factory.CreateAuthorizedClient();
 
-        var response = await client.PostAsJsonAsync("/api/PartnerTransactions", new PartnerTransactionRequest
+        var response = await PostAuthorizedAsync(client, new PartnerTransactionRequest
         {
             PartnerId = "P-1001",
             TransactionReference = "TX-1001",
@@ -66,9 +68,9 @@ public class TransactionEndpointTests
     public async Task Post_WhenUnhandledExceptionOccurs_ReturnsInternalServerErrorProblemDetails()
     {
         await using var factory = new TestApiFactory<ThrowingTransactionService>();
-        using var client = factory.CreateClient();
+        using var client = factory.CreateAuthorizedClient();
 
-        var response = await client.PostAsJsonAsync("/api/PartnerTransactions", new PartnerTransactionRequest
+        var response = await PostAuthorizedAsync(client, new PartnerTransactionRequest
         {
             PartnerId = "P-1001",
             TransactionReference = "TX-1001",
@@ -85,6 +87,50 @@ public class TransactionEndpointTests
         Assert.Equal("/api/PartnerTransactions", payload.Instance);
     }
 
+    [Fact]
+    public async Task Post_WhenApiKeyIsMissing_ReturnsUnauthorizedProblemDetails()
+    {
+        await using var factory = new TestApiFactory<FakeTransactionService>();
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/PartnerTransactions", new PartnerTransactionRequest
+        {
+            PartnerId = "P-1001",
+            TransactionReference = "TX-1001",
+            Amount = 250,
+            Currency = "USD"
+        });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+
+        var payload = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(payload);
+        Assert.Equal("Unauthorized request.", payload!.Title);
+        Assert.Equal(StatusCodes.Status401Unauthorized, payload.Status);
+    }
+
+    [Fact]
+    public async Task Post_WhenRateLimitExceeded_ReturnsTooManyRequestsProblemDetails()
+    {
+        await using var factory = new TestApiFactory<FakeTransactionService>();
+        using var client = factory.CreateAuthorizedClient();
+
+        HttpResponseMessage? lastResponse = null;
+
+        for (var attempt = 0; attempt < 11; attempt++)
+        {
+            lastResponse = await PostAuthorizedAsync(client, CreateValidRequest());
+        }
+
+        Assert.NotNull(lastResponse);
+        Assert.Equal((HttpStatusCode)StatusCodes.Status429TooManyRequests, lastResponse!.StatusCode);
+
+        var payload = await lastResponse.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(payload);
+        Assert.Equal("Too many requests.", payload!.Title);
+        Assert.Equal(StatusCodes.Status429TooManyRequests, payload.Status);
+    }
+
     private sealed class TestApiFactory<TTransactionService> : WebApplicationFactory<Program>
         where TTransactionService : class, ITransactionService
     {
@@ -96,6 +142,13 @@ public class TransactionEndpointTests
                 services.RemoveAll<ITransactionService>();
                 services.AddSingleton<ITransactionService, TTransactionService>();
             });
+        }
+
+        public HttpClient CreateAuthorizedClient()
+        {
+            var client = CreateClient();
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            return client;
         }
     }
 
@@ -121,5 +174,27 @@ public class TransactionEndpointTests
         {
             throw new InvalidOperationException("Mock unhandled exception.");
         }
+    }
+
+    private static PartnerTransactionRequest CreateValidRequest()
+    {
+        return new PartnerTransactionRequest
+        {
+            PartnerId = "P-1001",
+            TransactionReference = $"TX-{Guid.NewGuid():N}",
+            Amount = 250,
+            Currency = "USD"
+        };
+    }
+
+    private static Task<HttpResponseMessage> PostAuthorizedAsync(HttpClient client, PartnerTransactionRequest request)
+    {
+        var message = new HttpRequestMessage(HttpMethod.Post, "/api/PartnerTransactions")
+        {
+            Content = JsonContent.Create(request)
+        };
+        message.Headers.Add("X-Api-Key", "local-dev-api-key");
+
+        return client.SendAsync(message);
     }
 }

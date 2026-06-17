@@ -1,6 +1,7 @@
 using System.Net;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
+using System.Net.Http.Json;
 using PartnerIntegration.Api.Services.Implementations;
 using PartnerIntegration.Api.Services.Interfaces;
 using Polly;
@@ -15,7 +16,7 @@ public class PartnerVerificationServiceTests
         using var testContext = CreateService(
             [
                 new TimeoutException("Request timed out."),
-                new HttpResponseMessage(HttpStatusCode.BadRequest)
+                CreateJsonResponse(HttpStatusCode.BadRequest, false)
             ],
             maxRetryAttempts: 3,
             out var handler);
@@ -33,7 +34,7 @@ public class PartnerVerificationServiceTests
             [
                 new TimeoutException("Request timed out."),
                 new TimeoutException("Request timed out again."),
-                new HttpResponseMessage(HttpStatusCode.OK)
+                CreateJsonResponse(HttpStatusCode.OK, true)
             ],
             maxRetryAttempts: 3,
             out var handler);
@@ -58,6 +59,21 @@ public class PartnerVerificationServiceTests
 
         await Assert.ThrowsAsync<TimeoutException>(() => testContext.Service.VerifyPartnerAsync("P-1001"));
         Assert.Equal(3, handler.AttemptCount);
+    }
+
+    [Fact]
+    public async Task Should_ReturnFalse_When_ResponseBodyIsFalse()
+    {
+        using var testContext = CreateService(
+            [
+                CreateJsonResponse(HttpStatusCode.OK, false)
+            ],
+            maxRetryAttempts: 3,
+            out _);
+
+        var result = await testContext.Service.VerifyPartnerAsync("INVALID-123");
+
+        Assert.False(result);
     }
 
     private static TestContext CreateService(
@@ -137,5 +153,13 @@ public class PartnerVerificationServiceTests
 
             return Task.FromResult((HttpResponseMessage)outcome);
         }
+    }
+
+    private static HttpResponseMessage CreateJsonResponse(HttpStatusCode statusCode, bool isPartnerValid)
+    {
+        return new HttpResponseMessage(statusCode)
+        {
+            Content = JsonContent.Create(isPartnerValid)
+        };
     }
 }
