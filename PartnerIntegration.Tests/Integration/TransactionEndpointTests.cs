@@ -23,7 +23,7 @@ public class TransactionEndpointTests
         var response = await client.PostAsJsonAsync("/api/PartnerTransactions", new PartnerTransactionRequest
         {
             PartnerId = "PARTNER_001",
-            TransactionId = "TX-1001",
+            TransactionReference = "TX-1001",
             Amount = 250,
             Currency = "USD"
         });
@@ -52,7 +52,7 @@ public class TransactionEndpointTests
     {
         public Task<ApiResponse<string>> ProcessTransactionAsync(PartnerTransactionRequest request, CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(ApiResponse<string>.SuccessResponse($"Transaction {request.TransactionId} accepted."));
+            return Task.FromResult(ApiResponse<string>.SuccessResponse($"Transaction {request.TransactionReference} accepted."));
         }
     }
 }

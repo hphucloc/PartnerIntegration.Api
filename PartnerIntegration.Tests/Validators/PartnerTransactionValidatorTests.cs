@@ -13,15 +13,15 @@ public class PartnerTransactionValidatorTests
         var request = new PartnerTransactionRequest
         {
             PartnerId = "PARTNER_001",
-            TransactionId = "TX-123",
+            TransactionReference = "TX-123",
             Amount = 100,
             Currency = "USD"
         };
 
-        var isValid = _validator.Validate(request, out var errors);
+        var result = _validator.Validate(request);
 
-        Assert.True(isValid);
-        Assert.Empty(errors);
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Errors);
     }
 
     [Fact]
@@ -30,16 +30,17 @@ public class PartnerTransactionValidatorTests
         var request = new PartnerTransactionRequest
         {
             PartnerId = string.Empty,
-            TransactionId = string.Empty,
+            TransactionReference = string.Empty,
             Amount = 0,
             Currency = string.Empty
         };
 
-        var isValid = _validator.Validate(request, out var errors);
+        var result = _validator.Validate(request);
+        var errors = result.Errors.Select(error => error.ErrorMessage).ToList();
 
-        Assert.False(isValid);
+        Assert.False(result.IsValid);
         Assert.Contains("PartnerId is required.", errors);
-        Assert.Contains("TransactionId is required.", errors);
+        Assert.Contains("TransactionReference is required.", errors);
         Assert.Contains("Amount must be greater than zero.", errors);
         Assert.Contains("Currency is required.", errors);
     }

@@ -1,35 +1,40 @@
+using System.Globalization;
+using FluentValidation;
 using PartnerIntegration.Api.Models.Requests;
 
 namespace PartnerIntegration.Api.Validators
 {
-    public class PartnerTransactionValidator
+    public class PartnerTransactionValidator : AbstractValidator<PartnerTransactionRequest>
     {
-        public bool Validate(PartnerTransactionRequest request, out IEnumerable<string> errors)
+        private static readonly HashSet<string> ValidCurrencies = CultureInfo
+            .GetCultures(CultureTypes.SpecificCultures)
+            .Select(culture => new RegionInfo(culture.Name).ISOCurrencySymbol)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        public PartnerTransactionValidator()
         {
-            var validationErrors = new List<string>();
+            RuleFor(x => x.PartnerId)
+                .NotEmpty()
+                .WithMessage("PartnerId is required.");
 
-            if (string.IsNullOrWhiteSpace(request.PartnerId))
-            {
-                validationErrors.Add("PartnerId is required.");
-            }
+            RuleFor(x => x.TransactionReference)
+                .NotEmpty()
+                .WithMessage("TransactionReference is required.");
 
-            if (string.IsNullOrWhiteSpace(request.TransactionId))
-            {
-                validationErrors.Add("TransactionId is required.");
-            }
+            RuleFor(x => x.Amount)
+                .GreaterThan(0)
+                .WithMessage("Amount must be greater than zero.");
 
-            if (request.Amount <= 0)
-            {
-                validationErrors.Add("Amount must be greater than zero.");
-            }
+            RuleFor(x => x.Currency)
+                .NotEmpty()
+                .WithMessage("Currency is required.")
+                .Must(BeValidCurrency)
+                .WithMessage("Currency is invalid.");
+        }
 
-            if (string.IsNullOrWhiteSpace(request.Currency))
-            {
-                validationErrors.Add("Currency is required.");
-            }
-
-            errors = validationErrors;
-            return !validationErrors.Any();
+        private static bool BeValidCurrency(string? currency)
+        {
+            return !string.IsNullOrWhiteSpace(currency) && ValidCurrencies.Contains(currency);
         }
     }
 }

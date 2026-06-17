@@ -14,7 +14,12 @@ namespace PartnerIntegration.Api.MockApis
                 return BadRequest(false);
             }
 
-            return Ok(partnerId.StartsWith("PARTNER_"));
+            if (Random.Shared.NextDouble() < 0.3)
+            {
+                throw new TimeoutException("Mock partner verification request timed out.");
+            }
+
+            return Ok(partnerId.StartsWith("P-"));
         }
     }
 }

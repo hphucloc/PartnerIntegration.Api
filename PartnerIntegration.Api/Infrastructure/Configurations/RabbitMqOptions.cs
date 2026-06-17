@@ -7,5 +7,7 @@ namespace PartnerIntegration.Api.Infrastructure.Configurations
         public string UserName { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
         public string ExchangeName { get; set; } = string.Empty;
+        public string ExchangeType { get; set; } = "direct";
+        public string RoutingKey { get; set; } = "partner.transaction.accepted";
     }
 }
