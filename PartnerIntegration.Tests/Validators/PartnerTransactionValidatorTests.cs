@@ -12,7 +12,7 @@ public class PartnerTransactionValidatorTests
     {
         var request = new PartnerTransactionRequest
         {
-            PartnerId = "PARTNER_001",
+            PartnerId = "P-1001",
             TransactionReference = "TX-123",
             Amount = 100,
             Currency = "USD"
@@ -43,5 +43,38 @@ public class PartnerTransactionValidatorTests
         Assert.Contains("TransactionReference is required.", errors);
         Assert.Contains("Amount must be greater than zero.", errors);
         Assert.Contains("Currency is required.", errors);
+    }
+
+    [Fact]
+    public void Validate_WithInvalidCurrency_ReturnsCurrencyValidationError()
+    {
+        var request = new PartnerTransactionRequest
+        {
+            PartnerId = "P-1001",
+            TransactionReference = "TX-123",
+            Amount = 100,
+            Currency = "ZZZ"
+        };
+
+        var result = _validator.Validate(request);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, error => error.ErrorMessage == "Currency is invalid.");
+    }
+
+    [Fact]
+    public void Validate_WithLowerCaseValidCurrency_ReturnsTrue()
+    {
+        var request = new PartnerTransactionRequest
+        {
+            PartnerId = "P-1001",
+            TransactionReference = "TX-123",
+            Amount = 100,
+            Currency = "usd"
+        };
+
+        var result = _validator.Validate(request);
+
+        Assert.True(result.IsValid);
     }
 }
