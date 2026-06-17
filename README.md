@@ -6,39 +6,77 @@ This project is a small ASP.NET Core Web API for partner transaction processing.
 
 Main design choices:
 
-- **controller**: `PartnerTransactionsController` only handles HTTP input/output.
-- **Service layer**: `TransactionService` contains the transaction flow.
+- **Thin controller**: `PartnerTransactionsController` only handles HTTP input/output.
+- **Service layer**: `TransactionService` contains validation, partner verification, and message publishing flow.
 - **Validation layer**: `PartnerTransactionValidator` centralizes request validation rules.
-- **Typed `HttpClient`**: `PartnerVerificationService` calls the internal partner verification endpoint with retry/resilience support.
+- **Typed `HttpClient` with Polly-based resilience**: `PartnerVerificationService` calls the internal verification endpoint with retry support for transient failures.
 - **Messaging abstraction**: accepted transactions are published to RabbitMQ through `IMessagePublisher` and `IRabbitMqClient`.
 - **Global exception handling**: unhandled exceptions are returned as `ProblemDetails`.
 - **Basic protection**: the API uses `X-Api-Key` and rate limiting.
 
-## Run the Project
+## Prerequisites
 
-1. Start RabbitMQ:
+- **Docker Desktop**
+- **.NET 8 SDK**
+- **Visual Studio**
+
+## Run the Project in Visual Studio
+
+1. Open the solution in **Visual Studio**.
+
+2. Start RabbitMQ first.
+
+From the repository root:
 
 ```powershell
-docker compose up -d
+docker compose up -d rabbitmq
 ```
 
-2. Run the API:
+RabbitMQ Management UI: wait a minute to browse
 
-```powershell
-dotnet run --project .\PartnerIntegration.Api\PartnerIntegration.Api.csproj --launch-profile https
-```
+- `http://localhost:15672`
 
-3. Open Swagger:
+Default credentials:
 
-- `https://localhost:7079/swagger`
+- username: `guest`
+- password: `guest`
+
+3. In Visual Studio, set `PartnerIntegration.Api` as the startup project.
+
+4. Select the **Docker** launch profile.
+
+5. Run the project.
+
+Swagger will be available at:
+
+- `https://localhost:32775/swagger`
+
+## Partner Verification Retry
+
+The partner verification call uses a Polly-based retry strategy through the configured HTTP resilience handler.
+
+The mock verification endpoint is intentionally unstable for testing. In the current implementation, it has a 30% chance to throw a timeout-related failure and a 70% chance to return a normal response. The retry mechanism helps the API recover from these transient failures instead of failing immediately. (in PartnerVerificationController.cs)
+
+## Test Project
+
+The solution includes a separate test project: `PartnerIntegration.Tests`.
+
+It covers unit test scenarios for:
+
+- validation logic
+- Polly retry behavior in partner verification
+- transaction service business flow
+- RabbitMQ publisher behavior
+
+It also includes integration tests for the transaction endpoint.
 
 ## Test with Swagger
 
-Use the `POST /api/PartnerTransactions` endpoint in Swagger.
+Use the `POST /api/PartnerTransactions` endpoint.
 
-Required header:
+Required header X-Api-Key:
 
-- `X-Api-Key: x-api-key`
+- `x-api-key`
 
 Example request body:
 
