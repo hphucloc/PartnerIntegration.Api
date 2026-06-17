@@ -8,28 +8,22 @@ Main design choices:
 
 - **Thin controller**: `PartnerTransactionsController` only handles HTTP input/output.
 - **Service layer**: `TransactionService` contains validation, partner verification, and message publishing flow.
-- **Validation layer**: `PartnerTransactionValidator` centralizes request validation rules.
+- **Validation layer with FluentValidation**: `PartnerTransactionValidator` centralizes request validation rules.
 - **Typed `HttpClient` with Polly-based resilience**: `PartnerVerificationService` calls the internal verification endpoint with retry support for transient failures.
 - **Messaging abstraction**: accepted transactions are published to RabbitMQ through `IMessagePublisher` and `IRabbitMqClient`.
 - **Global exception handling**: unhandled exceptions are returned as `ProblemDetails`.
 - **Basic protection**: the API uses `X-Api-Key` and rate limiting.
 
 ## Prerequisites
-
+- **.NET8**
 - **Docker Desktop**
-- **.NET 8 SDK**
-- **Visual Studio**
 
-## Run the Project in Visual Studio
+Start RabbitMQ first.
 
-1. Open the solution in **Visual Studio**.
-
-2. Start RabbitMQ first.
-
-From the repository root:
+From the repository root: PartnerIntegration.Api
 
 ```powershell
-docker compose up -d rabbitmq
+docker compose up -d
 ```
 
 RabbitMQ Management UI: wait a minute to browse
@@ -41,21 +35,18 @@ Default credentials:
 - username: `guest`
 - password: `guest`
 
-3. In Visual Studio, set `PartnerIntegration.Api` as the startup project.
-
-4. Select the **Docker** launch profile.
-
-5. Run the project.
-
 Swagger will be available at:
 
-- `https://localhost:32775/swagger`
+- `http://localhost:8080/swagger/index.html`
 
 ## Partner Verification Retry
 
 The partner verification call uses a Polly-based retry strategy through the configured HTTP resilience handler.
 
-The mock verification endpoint is intentionally unstable for testing. In the current implementation, it has a 30% chance to throw a timeout-related failure and a 70% chance to return a normal response. The retry mechanism helps the API recover from these transient failures instead of failing immediately. (in PartnerVerificationController.cs)
+The mock verification endpoint is intentionally unstable for testing. 
+In the current implementation, it has a 30% chance to throw a timeout-related failure and a 70% chance to return a normal response. 
+The retry mechanism helps the API recover from these transient failures instead of failing immediately. 
+(logic in PartnerVerificationController.cs)
 
 ## Test Project
 
@@ -67,8 +58,6 @@ It covers unit test scenarios for:
 - Polly retry behavior in partner verification
 - transaction service business flow
 - RabbitMQ publisher behavior
-
-It also includes integration tests for the transaction endpoint.
 
 ## Test with Swagger
 
