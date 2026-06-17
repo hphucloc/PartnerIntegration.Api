@@ -1,10 +1,13 @@
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using PartnerIntegration.Api;
 using PartnerIntegration.Api.Models.Requests;
 using PartnerIntegration.Api.Models.Responses;
@@ -17,7 +20,7 @@ public class TransactionEndpointTests
     [Fact]
     public async Task Post_WithValidRequest_ReturnsOkResponse()
     {
-        await using var factory = new TestApiFactory();
+        await using var factory = new TestApiFactory<FakeTransactionService>();
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/PartnerTransactions", new PartnerTransactionRequest
@@ -36,14 +39,62 @@ public class TransactionEndpointTests
         Assert.Equal("Transaction TX-1001 accepted.", payload.Data);
     }
 
-    private sealed class TestApiFactory : WebApplicationFactory<Program>
+    [Fact]
+    public async Task Post_WhenTimeoutExceptionOccurs_ReturnsGatewayTimeoutProblemDetails()
+    {
+        await using var factory = new TestApiFactory<TimeoutTransactionService>();
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/PartnerTransactions", new PartnerTransactionRequest
+        {
+            PartnerId = "P-1001",
+            TransactionReference = "TX-1001",
+            Amount = 250,
+            Currency = "USD"
+        });
+
+        Assert.Equal(HttpStatusCode.GatewayTimeout, response.StatusCode);
+
+        var payload = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(payload);
+        Assert.Equal("The request timed out.", payload!.Title);
+        Assert.Equal(StatusCodes.Status504GatewayTimeout, payload.Status);
+        Assert.Equal("/api/PartnerTransactions", payload.Instance);
+    }
+
+    [Fact]
+    public async Task Post_WhenUnhandledExceptionOccurs_ReturnsInternalServerErrorProblemDetails()
+    {
+        await using var factory = new TestApiFactory<ThrowingTransactionService>();
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/PartnerTransactions", new PartnerTransactionRequest
+        {
+            PartnerId = "P-1001",
+            TransactionReference = "TX-1001",
+            Amount = 250,
+            Currency = "USD"
+        });
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+
+        var payload = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.NotNull(payload);
+        Assert.Equal("An unexpected error occurred.", payload!.Title);
+        Assert.Equal(StatusCodes.Status500InternalServerError, payload.Status);
+        Assert.Equal("/api/PartnerTransactions", payload.Instance);
+    }
+
+    private sealed class TestApiFactory<TTransactionService> : WebApplicationFactory<Program>
+        where TTransactionService : class, ITransactionService
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
+            builder.ConfigureLogging(logging => logging.ClearProviders());
             builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<ITransactionService>();
-                services.AddSingleton<ITransactionService, FakeTransactionService>();
+                services.AddSingleton<ITransactionService, TTransactionService>();
             });
         }
     }
@@ -53,6 +104,22 @@ public class TransactionEndpointTests
         public Task<ApiResponse<string>> ProcessTransactionAsync(PartnerTransactionRequest request, CancellationToken cancellationToken = default)
         {
             return Task.FromResult(ApiResponse<string>.SuccessResponse($"Transaction {request.TransactionReference} accepted."));
+        }
+    }
+
+    private sealed class TimeoutTransactionService : ITransactionService
+    {
+        public Task<ApiResponse<string>> ProcessTransactionAsync(PartnerTransactionRequest request, CancellationToken cancellationToken = default)
+        {
+            throw new TimeoutException("Mock timeout from transaction service.");
+        }
+    }
+
+    private sealed class ThrowingTransactionService : ITransactionService
+    {
+        public Task<ApiResponse<string>> ProcessTransactionAsync(PartnerTransactionRequest request, CancellationToken cancellationToken = default)
+        {
+            throw new InvalidOperationException("Mock unhandled exception.");
         }
     }
 }
