@@ -1,4 +1,5 @@
 using PartnerIntegration.Api.Services.Interfaces;
+using System.Net.Http.Json;
 
 namespace PartnerIntegration.Api.Services.Implementations
 {
@@ -14,12 +15,17 @@ namespace PartnerIntegration.Api.Services.Implementations
 
         public async Task<bool> VerifyPartnerAsync(string partnerId, CancellationToken cancellationToken = default)
         {
-            var response =
-                await _httpClient.GetAsync(
-                    $"api/PartnerVerification/verify/{partnerId}",
-                    cancellationToken);
+            var response = await _httpClient.GetAsync(
+                $"api/PartnerVerification/verify/{partnerId}",
+                cancellationToken);
 
-            return response.IsSuccessStatusCode;       
+            if (!response.IsSuccessStatusCode)
+            {
+                return false;
+            }
+
+            var isValid = await response.Content.ReadFromJsonAsync<bool?>(cancellationToken: cancellationToken);
+            return isValid ?? false;
         }
     }
 }

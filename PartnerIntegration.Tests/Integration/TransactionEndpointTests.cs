@@ -193,7 +193,7 @@ public class TransactionEndpointTests
         {
             Content = JsonContent.Create(request)
         };
-        message.Headers.Add("X-Api-Key", "local-dev-api-key");
+        message.Headers.Add("X-Api-Key", "x-api-key");
 
         return client.SendAsync(message);
     }
